@@ -153,13 +153,51 @@
   const tr = (key) => text[state.language][key] || text.en[key] || key;
 
   const safe = (value) =>
-    String(value ?? "").replace(/[&<>"']/g, (c) => ({
+    String(value ?? "").replace(/[&<>"']/g, (character) => ({
       "&": "&amp;",
       "<": "&lt;",
       ">": "&gt;",
       '"': "&quot;",
       "'": "&#39;"
-    }[c]));
+    }[character]));
+
+  const requiredIds = [
+    "requirements-file",
+    "pdf-files",
+    "requirements-error",
+    "tender-details",
+    "requirements-empty",
+    "requirements-table-wrapper",
+    "requirements-list",
+    "uploaded-list-container",
+    "uploaded-files",
+    "file-count",
+    "upload-message",
+    "valid-count",
+    "optional-count",
+    "problem-count",
+    "requirements-count",
+    "validation-message",
+    "generate-button",
+    "generate-help"
+  ];
+
+  const missingIds = requiredIds.filter((id) => !$(id));
+
+  if (missingIds.length) {
+    const message =
+      `This page's HTML and script.js do not match. Missing page elements: ${missingIds.join(", ")}. Replace the three files with the same release, then reload.`;
+
+    if (document.body) {
+      document.body.innerHTML =
+        `<main style="max-width:720px;margin:48px auto;padding:24px;font:16px/1.5 system-ui"><h1>Page files do not match</h1><p>${safe(message)}</p></main>`;
+    } else {
+      window.alert(message);
+    }
+
+    console.error(message);
+    return;
+  }
 
   const formatSize = (bytes) =>
     bytes < 1024 * 1024
@@ -168,7 +206,10 @@
 
   const dateOnly = (value) => {
     if (!value) return null;
-    const date = new Date(`${value}T00:00:00Z`);
+    const match = String(value).match(/^\d{4}-\d{2}-\d{2}/);
+    if (!match) return null;
+
+    const date = new Date(`${match[0]}T00:00:00Z`);
     return Number.isNaN(date.getTime()) ? null : date;
   };
 
@@ -207,18 +248,29 @@
     try {
       const data = JSON.parse(await file.text());
 
-      if (!data || typeof data.tender !== "object" || !Array.isArray(data.requirements)) {
+      if (
+        !data ||
+        !data.tender ||
+        typeof data.tender !== "object" ||
+        Array.isArray(data.tender) ||
+        !Array.isArray(data.requirements)
+      ) {
         throw new Error(tr("invalidJson"));
       }
 
       const ids = new Set();
       const requirements = data.requirements
         .map((requirement, index) => {
-          if (!requirement || requirement.id == null || ids.has(String(requirement.id))) {
+          if (
+            !requirement ||
+            requirement.id == null ||
+            ids.has(String(requirement.id))
+          ) {
             throw new Error(tr("invalidJson"));
           }
 
           ids.add(String(requirement.id));
+
           return {
             ...requirement,
             id: String(requirement.id),
@@ -274,6 +326,7 @@
     for (const [requirementId, currentFileId] of state.matches) {
       if (currentFileId === fileId) return requirementId;
     }
+
     return null;
   }
 
@@ -320,6 +373,7 @@
       $("requirements-empty").textContent = state.tender
         ? tr("noRequirements")
         : tr("requirementsEmpty");
+
       $("requirements-empty").classList.remove("hidden");
       $("requirements-table-wrapper").classList.add("hidden");
       return;
@@ -339,7 +393,8 @@
 
       const choices = state.files.filter((file) =>
         !isDuplicate(file) &&
-        (!requirementForFile(file.id) || requirementForFile(file.id) === requirement.id)
+        (!requirementForFile(file.id) ||
+          requirementForFile(file.id) === requirement.id)
       );
 
       const options = [
@@ -400,8 +455,17 @@
     event.target.value = "";
     if (!selected.length) return;
 
+    if (!window.pdfjsLib) {
+      return showNotice(
+        "upload-message",
+        "PDF page-count library did not load. Check your internet connection and reload the page.",
+        true
+      );
+    }
+
     const nonPdf = selected.find((file) =>
-      !file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf"
+      !file.name.toLowerCase().endsWith(".pdf") &&
+      file.type !== "application/pdf"
     );
 
     if (nonPdf) {
@@ -447,6 +511,7 @@
 
   async function digest(buffer) {
     const bytes = await crypto.subtle.digest("SHA-256", buffer);
+
     return Array.from(
       new Uint8Array(bytes),
       (byte) => byte.toString(16).padStart(2, "0")
@@ -458,10 +523,14 @@
     list.replaceChildren();
 
     const total = state.files.reduce((sum, file) => sum + file.size, 0);
+
     $("file-count").textContent =
       `${state.files.length} ${state.files.length === 1 ? "file" : "files"} · ${formatSize(total)}`;
 
-    $("uploaded-list-container").classList.toggle("hidden", state.files.length === 0);
+    $("uploaded-list-container").classList.toggle(
+      "hidden",
+      state.files.length === 0
+    );
 
     state.files.forEach((file) => {
       const row = document.createElement("div");
@@ -503,11 +572,14 @@
     $("valid-count").textContent = valid;
     $("optional-count").textContent = optional;
     $("problem-count").textContent = problems;
-    $("requirements-count").textContent = `${valid} / ${state.requirements.length} ${tr("ok")}`;
+    $("requirements-count").textContent =
+      `${valid} / ${state.requirements.length} ${tr("ok")}`;
 
-    const ready = Boolean(state.tender && state.requirements.length && problems === 0);
+    const ready = Boolean(
+      state.tender && state.requirements.length && problems === 0
+    );
+
     $("generate-button").disabled = !ready;
-
     $("validation-message").textContent = !state.tender
       ? tr("loadFirst")
       : ready
@@ -526,13 +598,34 @@
 
   function showNotice(id, message, error) {
     const element = $(id);
-    element.textContent = message;
-    element.classList.toggle("hidden", !message);
-    element.classList.toggle("error", Boolean(error));
+
+    if (element) {
+      element.textContent = message;
+      element.classList.toggle("hidden", !message);
+      element.classList.toggle("error", Boolean(error));
+      return;
+    }
+
+    // A stale or mismatched HTML file may not contain this notice element.
+    const fallback = $("validation-message");
+
+    if (fallback) {
+      fallback.textContent = message;
+    } else if (message) {
+      window.alert(message);
+    }
+
+    console.error(`Missing expected page element #${id}.`, message);
   }
 
   async function generatePackage() {
-    if ($("generate-button").disabled || !window.PDFLib) return;
+    if ($("generate-button").disabled) return;
+
+    if (!window.PDFLib) {
+      $("validation-message").textContent =
+        "PDF generation library did not load. Check your internet connection and reload the page.";
+      return;
+    }
 
     $("generate-button").disabled = true;
     $("validation-message").textContent = tr("generating");
@@ -566,14 +659,29 @@
 
       let cover = output.addPage(pageSize);
 
-      draw(cover, "TENDER DOCUMENT PACKAGE", margin, 720, 19, bold, rgb(.12, .29, .62));
-      draw(cover, `${tr("tenderId")}: ${state.tender.tender_id || "—"}`, margin, 674, 12, bold);
-      draw(cover, `${tr("tenderTitle")}: ${state.tender.title_en || state.tender.title || "—"}`, margin, 649, 12);
-      draw(cover, `${tr("entity")}: ${state.tender.procuring_entity || "—"}`, margin, 624, 12);
-      draw(cover, `${tr("bidder")}: ${state.tender.bidder || "—"}`, margin, 599, 12);
-      draw(cover, `${tr("deadline")}: ${state.tender.submission_deadline || "—"}`, margin, 574, 12);
-      draw(cover, `${tr("packageDate")}: ${new Date().toISOString().slice(0, 10)}`, margin, 549, 12);
-      draw(cover, tr("included"), margin, 500, 13, bold);
+      draw(
+        cover,
+        "TENDER DOCUMENT PACKAGE",
+        margin,
+        720,
+        19,
+        bold,
+        rgb(.12, .29, .62)
+      );
+
+      // The cover page is always English, regardless of the selected UI language.
+      draw(cover, `Tender ID: ${state.tender.tender_id || "—"}`, margin, 674, 12, bold);
+      draw(cover, `Tender title: ${state.tender.title_en || state.tender.title || "—"}`, margin, 649, 12);
+      draw(cover, `Procuring entity: ${state.tender.procuring_entity || "—"}`, margin, 624, 12);
+      draw(cover, `Bidder: ${state.tender.bidder || "—"}`, margin, 599, 12);
+      draw(cover, `Submission deadline: ${state.tender.submission_deadline || "—"}`, margin, 574, 12);
+
+      const today = new Date();
+      const packageDate =
+        `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+      draw(cover, `Package date: ${packageDate}`, margin, 549, 12);
+      draw(cover, "Included documents", margin, 500, 13, bold);
 
       let y = 475;
 
@@ -585,11 +693,18 @@
 
         if (y < 55) {
           cover = output.addPage(pageSize);
-          draw(cover, tr("included"), margin, 730, 13, bold);
+          draw(cover, "Included documents (continued)", margin, 730, 13, bold);
           y = 700;
         }
 
-        draw(cover, `${requirement.order}. ${name} — ${file.name}`, margin + 10, y, 10);
+        draw(
+          cover,
+          `${requirement.order}. ${name} — ${file.name}`,
+          margin + 10,
+          y,
+          10
+        );
+
         y -= 20;
       }
 
@@ -629,13 +744,15 @@
       const link = document.createElement("a");
 
       link.href = url;
-      link.download = `${tenderId.replace(/[\\/:*?"<>|]/g, "_")}_Package.pdf`;
+      link.download =
+        `${tenderId.replace(/[\\/:*?"<>|]/g, "_")}_Package.pdf`;
       link.click();
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       $("validation-message").textContent = tr("generated");
     } catch (error) {
-      $("validation-message").textContent = `${tr("generateError")}${error.message}`;
+      $("validation-message").textContent =
+        `${tr("generateError")}${error.message}`;
     } finally {
       updateValidation();
     }
