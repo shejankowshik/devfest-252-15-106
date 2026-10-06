@@ -1,656 +1,130 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <meta
-        name="description"
-        content="Tender document package checker"
-    >
-
-    <title>Tender Package Checker</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Prepare and validate a tender document package in your browser.">
+  <title>Tender Package Checker</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js" defer></script>
+  <script src="script.js" defer></script>
 </head>
-
-
 <body>
+  <header class="site-header">
+    <div class="container header-content">
+      <div>
+        <p class="eyebrow" data-i18n="eyebrow">TENDER DOCUMENT WORKSPACE</p>
+        <h1 data-i18n="appTitle">Tender Package Checker</h1>
+        <p class="subtitle" data-i18n="appSubtitle">Prepare, validate, and generate a complete tender package.</p>
+      </div>
+      <div class="language-switcher" aria-label="Language selection">
+        <button class="language-btn active" type="button" data-language="en">English</button>
+        <button class="language-btn" type="button" data-language="bn">বাংলা</button>
+      </div>
+    </div>
+  </header>
 
-    <!-- ==============================
-         HEADER
-    =============================== -->
-
-    <header class="site-header">
-
-        <div class="container header-content">
-
-            <div class="brand">
-
-                <h1>Tender Package Checker</h1>
-
-                <p>
-                    Prepare, validate, and generate a tender document package.
-                </p>
-
-            </div>
-
-
-            <!-- Language switch -->
-
-            <div
-                class="language-switcher"
-                aria-label="Language selection"
-            >
-
-                <button
-                    class="language-btn active"
-                    type="button"
-                    data-language="en"
-                >
-                    English
-                </button>
-
-                <button
-                    class="language-btn"
-                    type="button"
-                    data-language="bn"
-                >
-                    বাংলা
-                </button>
-
-            </div>
-
+  <main class="container main-content">
+    <section class="card" aria-labelledby="tender-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-number">01</p>
+          <h2 id="tender-heading" data-i18n="tenderInfo">Tender information</h2>
         </div>
-
-    </header>
-
-
-
-    <!-- ==============================
-         MAIN CONTENT
-    =============================== -->
-
-    <main class="container main-content">
-
-
-        <!-- ==============================
-             01. TENDER INFORMATION
-        =============================== -->
-
-        <section
-            class="card"
-            id="tender-section"
-            aria-labelledby="tender-heading"
-        >
-
-            <div class="section-heading">
-
-                <div>
-
-                    <p class="section-number">
-                        01
-                    </p>
-
-                    <h2 id="tender-heading">
-                        Tender Information
-                    </h2>
-
-                </div>
-
-            </div>
-
-
-            <!-- Requirements JSON loader -->
-
-            <div class="file-loader">
-
-                <div>
-
-                    <h3>
-                        Load tender requirements
-                    </h3>
-
-                    <p>
-                        Select the
-                        <strong>requirements.json</strong>
-                        file provided with the tender.
-                    </p>
-
-                </div>
-
-
-                <label
-                    class="button button-primary file-button"
-                    for="requirements-file"
-                >
-                    Choose requirements.json
-                </label>
-
-
-                <input
-                    id="requirements-file"
-                    type="file"
-                    accept=".json,application/json"
-                >
-
-            </div>
-
-
-            <!-- Tender information -->
-
-            <div
-                class="tender-details hidden"
-                id="tender-details"
-            >
-
-                <div class="detail-item">
-
-                    <span class="detail-label">
-                        Tender ID
-                    </span>
-
-                    <strong id="tender-id">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="detail-item">
-
-                    <span class="detail-label">
-                        Tender Title
-                    </span>
-
-                    <strong id="tender-title">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="detail-item">
-
-                    <span class="detail-label">
-                        Procuring Entity
-                    </span>
-
-                    <strong id="procuring-entity">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="detail-item">
-
-                    <span class="detail-label">
-                        Bidder
-                    </span>
-
-                    <strong id="bidder">
-                        —
-                    </strong>
-
-                </div>
-
-
-                <div class="detail-item">
-
-                    <span class="detail-label">
-                        Submission Deadline
-                    </span>
-
-                    <strong id="submission-deadline">
-                        —
-                    </strong>
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ==============================
-             02. REQUIRED DOCUMENTS
-        =============================== -->
-
-        <section
-            class="card"
-            id="requirements-section"
-            aria-labelledby="requirements-heading"
-        >
-
-            <div class="section-heading">
-
-                <div>
-
-                    <p class="section-number">
-                        02
-                    </p>
-
-                    <h2 id="requirements-heading">
-                        Required Documents
-                    </h2>
-
-                </div>
-
-
-                <span
-                    class="section-count"
-                    id="requirements-count"
-                >
-                    0 / 0 OK
-                </span>
-
-            </div>
-
-
-            <!-- Empty state -->
-
-            <div
-                class="empty-state"
-                id="requirements-empty"
-            >
-
-                <p>
-                    Load requirements.json to see the required documents.
-                </p>
-
-            </div>
-
-
-            <!-- Requirements table -->
-
-            <div
-                class="table-wrapper hidden"
-                id="requirements-table-wrapper"
-            >
-
-                <table>
-
-                    <thead>
-
-                        <tr>
-
-                            <th scope="col">
-                                #
-                            </th>
-
-                            <th scope="col">
-                                Document
-                            </th>
-
-                            <th scope="col">
-                                Requirement
-                            </th>
-
-                            <th scope="col">
-                                Expiry
-                            </th>
-
-                            <th scope="col">
-                                Matched File
-                            </th>
-
-                            <th scope="col">
-                                Status
-                            </th>
-
-                        </tr>
-
-                    </thead>
-
-
-                    <tbody id="requirements-list">
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ==============================
-             03. UPLOADED DOCUMENTS
-        =============================== -->
-
-        <section
-            class="card"
-            id="uploads-section"
-            aria-labelledby="uploads-heading"
-        >
-
-            <div class="section-heading">
-
-                <div>
-
-                    <p class="section-number">
-                        03
-                    </p>
-
-                    <h2 id="uploads-heading">
-                        Uploaded Documents
-                    </h2>
-
-                </div>
-
-            </div>
-
-
-            <!-- Upload area -->
-
-            <div class="upload-box">
-
-                <div
-                    class="upload-icon"
-                    aria-hidden="true"
-                >
-                    ↑
-                </div>
-
-
-                <h3>
-                    Upload PDF files
-                </h3>
-
-
-                <p>
-                    Choose the tender documents you want to include.
-                </p>
-
-
-                <label
-                    class="button button-secondary file-button"
-                    for="pdf-files"
-                >
-                    Choose PDF Files
-                </label>
-
-
-                <input
-                    id="pdf-files"
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    multiple
-                >
-
-
-                <small>
-                    Up to 30 files • 50 MB total
-                </small>
-
-            </div>
-
-
-            <!-- Uploaded files -->
-
-            <div
-                class="uploaded-list hidden"
-                id="uploaded-list-container"
-            >
-
-                <div class="list-header">
-
-                    <h3>
-                        Files
-                    </h3>
-
-                    <span id="file-count">
-                        0 files
-                    </span>
-
-                </div>
-
-
-                <div id="uploaded-files">
-
-                </div>
-
-            </div>
-
-        </section>
-
-
-
-        <!-- ==============================
-             04. VALIDATION SUMMARY
-        =============================== -->
-
-        <section
-            class="card"
-            id="validation-section"
-            aria-labelledby="validation-heading"
-        >
-
-            <div class="section-heading">
-
-                <div>
-
-                    <p class="section-number">
-                        04
-                    </p>
-
-                    <h2 id="validation-heading">
-                        Validation Summary
-                    </h2>
-
-                </div>
-
-            </div>
-
-
-            <div class="validation-summary">
-
-
-                <!-- Valid -->
-
-                <div class="summary-item summary-ok">
-
-                    <span
-                        class="summary-icon"
-                        aria-hidden="true"
-                    >
-                        ✓
-                    </span>
-
-                    <div>
-
-                        <strong id="valid-count">
-                            0
-                        </strong>
-
-                        <span>
-                            Valid
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <!-- Optional -->
-
-                <div class="summary-item summary-warning">
-
-                    <span
-                        class="summary-icon"
-                        aria-hidden="true"
-                    >
-                        !
-                    </span>
-
-                    <div>
-
-                        <strong id="optional-count">
-                            0
-                        </strong>
-
-                        <span>
-                            Optional
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <!-- Problems -->
-
-                <div class="summary-item summary-error">
-
-                    <span
-                        class="summary-icon"
-                        aria-hidden="true"
-                    >
-                        ×
-                    </span>
-
-                    <div>
-
-                        <strong id="problem-count">
-                            0
-                        </strong>
-
-                        <span>
-                            Problems
-                        </span>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <p
-                class="validation-message"
-                id="validation-message"
-            >
-                Load a tender and upload documents to begin the validation workflow.
-            </p>
-
-        </section>
-
-
-
-        <!-- ==============================
-             05. GENERATE PACKAGE
-        =============================== -->
-
-        <section
-            class="card generate-card"
-            id="generate-section"
-            aria-labelledby="generate-heading"
-        >
-
-            <div>
-
-                <p class="section-number">
-                    05
-                </p>
-
-                <h2 id="generate-heading">
-                    Generate Package
-                </h2>
-
-                <p class="generate-description">
-                    When all blocking problems are fixed,
-                    the final PDF package can be generated.
-                </p>
-
-            </div>
-
-
-            <button
-                class="button button-primary generate-button"
-                id="generate-button"
-                type="button"
-                disabled
-            >
-                Generate Package
-            </button>
-
-
-            <div
-                class="download-result hidden"
-                id="download-result"
-            >
-
-                <p class="success-text">
-                    Package generated successfully.
-                </p>
-
-
-                <button
-                    class="button button-secondary"
-                    id="download-button"
-                    type="button"
-                >
-                    Download Package
-                </button>
-
-            </div>
-
-        </section>
-
-    </main>
-
-
-
-    <!-- ==============================
-         FOOTER
-    =============================== -->
-
-    <footer class="site-footer">
-
-        <div class="container">
-
-            <p>
-                Tender Package Checker • Frontend-only application
-            </p>
-
+      </div>
+      <div class="file-loader">
+        <div>
+          <h3 data-i18n="loadRequirements">Load tender requirements</h3>
+          <p data-i18n="loadHelp">Choose the requirements.json file supplied for this tender.</p>
         </div>
+        <label class="button button-primary file-button" for="requirements-file" data-i18n="chooseJson">Choose requirements.json</label>
+        <input id="requirements-file" type="file" accept=".json,application/json">
+      </div>
+      <p id="requirements-error" class="notice error hidden" role="alert"></p>
+      <dl id="tender-details" class="tender-details hidden"></dl>
+    </section>
 
-    </footer>
+    <section class="card" aria-labelledby="requirements-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-number">02</p>
+          <h2 id="requirements-heading" data-i18n="requiredDocs">Required documents</h2>
+        </div>
+        <span id="requirements-count" class="section-count">0 / 0 OK</span>
+      </div>
+      <div id="requirements-empty" class="empty-state" data-i18n="requirementsEmpty">Load requirements.json to see the required documents.</div>
+      <div id="requirements-table-wrapper" class="table-wrapper hidden">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th data-i18n="document">Document</th>
+              <th data-i18n="requirement">Requirement</th>
+              <th data-i18n="expiry">Expiry</th>
+              <th data-i18n="matchedFile">Matched file</th>
+              <th data-i18n="status">Status</th>
+            </tr>
+          </thead>
+          <tbody id="requirements-list"></tbody>
+        </table>
+      </div>
+    </section>
 
+    <section class="card" aria-labelledby="uploads-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-number">03</p>
+          <h2 id="uploads-heading" data-i18n="uploadedDocs">Uploaded documents</h2>
+        </div>
+      </div>
+      <div class="upload-box">
+        <div class="upload-icon" aria-hidden="true">↑</div>
+        <h3 data-i18n="uploadPdfs">Upload PDF files</h3>
+        <p data-i18n="uploadHelp">Add the documents you want to match to tender requirements.</p>
+        <label class="button button-secondary file-button" for="pdf-files" data-i18n="choosePdfs">Choose PDF files</label>
+        <input id="pdf-files" type="file" accept=".pdf,application/pdf" multiple>
+        <small data-i18n="limits">PDF only · Up to 30 files · 50 MB total</small>
+      </div>
+      <p id="upload-message" class="notice hidden" role="status"></p>
+      <div id="uploaded-list-container" class="uploaded-list hidden">
+        <div class="list-header">
+          <h3 data-i18n="files">Files</h3>
+          <span id="file-count">0 files · 0 MB</span>
+        </div>
+        <div id="uploaded-files"></div>
+      </div>
+    </section>
 
+    <section class="card" aria-labelledby="validation-heading">
+      <div class="section-heading">
+        <div>
+          <p class="section-number">04</p>
+          <h2 id="validation-heading" data-i18n="validationSummary">Validation summary</h2>
+        </div>
+      </div>
+      <div class="validation-summary">
+        <div class="summary-item summary-ok">
+          <span aria-hidden="true">✓</span>
+          <div><strong id="valid-count">0</strong><span data-i18n="valid">OK</span></div>
+        </div>
+        <div class="summary-item summary-warning">
+          <span aria-hidden="true">!</span>
+          <div><strong id="optional-count">0</strong><span data-i18n="notProvided">Not provided</span></div>
+        </div>
+        <div class="summary-item summary-error">
+          <span aria-hidden="true">×</span>
+          <div><strong id="problem-count">0</strong><span data-i18n="blockingIssues">Blocking issues</span></div>
+        </div>
+      </div>
+      <p id="validation-message" class="validation-message" aria-live="polite"></p>
+      <div class="generate-area">
+        <button id="generate-button" class="button button-primary button-large" type="button" disabled data-i18n="generate">Generate package PDF</button>
+        <span id="generate-help" class="muted" data-i18n="generateHelp">Load requirements and resolve all blocking issues to generate.</span>
+      </div>
+    </section>
 
-    <!-- ==============================
-         PDF.JS + APPLICATION
-    =============================== -->
-
-    <script type="module">
-
-        import * as pdfjsLib
-            from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
-
-
-        // Make PDF.js available to script.js
-
-        window.pdfjsLib = pdfjsLib;
-
-
-        // Configure PDF.js worker
-
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
-
-
-        // Load our application JavaScript
-
-        import("./script.js");
-
-    </script>
-
+    <footer data-i18n="privacyNote">Files are processed locally in your browser and are not uploaded.</footer>
+  </main>
 </body>
-
 </html>

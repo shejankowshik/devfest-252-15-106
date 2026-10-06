@@ -1,1462 +1,645 @@
-// ======================================================
-// TENDER PACKAGE CHECKER
-//
-// Current features:
-//
-// 1. Load requirements.json
-// 2. Upload PDF files
-// 3. Count PDF pages
-// 4. Remove PDF files
-// 5. Match files to requirements
-// 6. Change or undo matches
-//
-// Not implemented yet:
-//
-// - Expiry date validation
-// - Duplicate detection
-// - Final status rules
-// - PDF merging
-// - Cover page
-// - Footer
-// - Final download
-// ======================================================
+/* Tender Package Checker: all PDF work stays in this browser. */
+(() => {
+  "use strict";
 
-
-
-// ======================================================
-// DOM ELEMENTS
-// ======================================================
-
-const languageButtons =
-    document.querySelectorAll(".language-btn");
-
-
-const requirementsFileInput =
-    document.getElementById(
-        "requirements-file"
-    );
-
-
-const pdfFilesInput =
-    document.getElementById(
-        "pdf-files"
-    );
-
-
-const tenderDetails =
-    document.getElementById(
-        "tender-details"
-    );
-
-
-const tenderIdElement =
-    document.getElementById(
-        "tender-id"
-    );
-
-
-const tenderTitleElement =
-    document.getElementById(
-        "tender-title"
-    );
-
-
-const procuringEntityElement =
-    document.getElementById(
-        "procuring-entity"
-    );
-
-
-const bidderElement =
-    document.getElementById(
-        "bidder"
-    );
-
-
-const submissionDeadlineElement =
-    document.getElementById(
-        "submission-deadline"
-    );
-
-
-const requirementsEmpty =
-    document.getElementById(
-        "requirements-empty"
-    );
-
-
-const requirementsTableWrapper =
-    document.getElementById(
-        "requirements-table-wrapper"
-    );
-
-
-const requirementsList =
-    document.getElementById(
-        "requirements-list"
-    );
-
-
-const requirementsCount =
-    document.getElementById(
-        "requirements-count"
-    );
-
-
-const uploadedListContainer =
-    document.getElementById(
-        "uploaded-list-container"
-    );
-
-
-const uploadedFiles =
-    document.getElementById(
-        "uploaded-files"
-    );
-
-
-const fileCount =
-    document.getElementById(
-        "file-count"
-    );
-
-
-const validationMessage =
-    document.getElementById(
-        "validation-message"
-    );
-
-
-const generateButton =
-    document.getElementById(
-        "generate-button"
-    );
-
-
-
-// ======================================================
-// APPLICATION STATE
-// ======================================================
-
-const appState = {
-
-    // Current language
+  const MAX_FILES = 30;
+  const MAX_BYTES = 50 * 1024 * 1024;
+  const $ = (id) => document.getElementById(id);
+  const state = {
     language: "en",
-
-
-    // Tender information
     tender: null,
-
-
-    // Requirements from JSON
     requirements: [],
+    files: [],
+    matches: new Map(),
+    expiryDates: new Map()
+  };
 
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
 
-    // Uploaded PDF files
-    uploadedFiles: [],
-
-
-    // Matches
-    //
-    // Example:
-    //
-    // {
-    //     "requirement-id-1": "file-id-1",
-    //     "requirement-id-2": "file-id-3"
-    // }
-    //
-    matches: {}
-
-};
-
-
-
-// ======================================================
-// LIMITS
-// ======================================================
-
-const MAX_FILES = 30;
-
-const MAX_TOTAL_SIZE =
-    50 * 1024 * 1024; // 50 MB
-
-
-
-// ======================================================
-// LANGUAGE SWITCHER
-// ======================================================
-
-languageButtons.forEach(
-    (button) => {
-
-        button.addEventListener(
-            "click",
-            () => {
-
-                // Remove active state
-                // from all buttons.
-                languageButtons.forEach(
-                    (item) => {
-
-                        item.classList.remove(
-                            "active"
-                        );
-
-                    }
-                );
-
-
-                // Activate selected button.
-                button.classList.add(
-                    "active"
-                );
-
-
-                // Save selected language.
-                appState.language =
-                    button.dataset.language;
-
-
-                // Refresh document names.
-                renderRequirements();
-
-                renderUploadedFiles();
-
-            }
-        );
-
+  const text = {
+    en: {
+      eyebrow: "TENDER DOCUMENT WORKSPACE",
+      appTitle: "Tender Package Checker",
+      appSubtitle: "Prepare, validate, and generate a complete tender package.",
+      tenderInfo: "Tender information",
+      loadRequirements: "Load tender requirements",
+      loadHelp: "Choose the requirements.json file supplied for this tender.",
+      chooseJson: "Choose requirements.json",
+      requiredDocs: "Required documents",
+      requirementsEmpty: "Load requirements.json to see the required documents.",
+      document: "Document",
+      requirement: "Requirement",
+      expiry: "Expiry",
+      matchedFile: "Matched file",
+      status: "Status",
+      uploadedDocs: "Uploaded documents",
+      uploadPdfs: "Upload PDF files",
+      uploadHelp: "Add the documents you want to match to tender requirements.",
+      choosePdfs: "Choose PDF files",
+      limits: "PDF only · Up to 30 files · 50 MB total",
+      files: "Files",
+      validationSummary: "Validation summary",
+      valid: "OK",
+      notProvided: "Not provided",
+      blockingIssues: "Blocking issues",
+      generate: "Generate package PDF",
+      generateHelp: "Load requirements and resolve all blocking issues to generate.",
+      privacyNote: "Files are processed locally in your browser and are not uploaded.",
+      tenderId: "Tender ID",
+      tenderTitle: "Tender title",
+      entity: "Procuring entity",
+      bidder: "Bidder",
+      deadline: "Submission deadline",
+      required: "Required",
+      optional: "Optional",
+      notRequired: "Not required",
+      selectPdf: "Select PDF",
+      expiryNeeded: "Expiry date needed",
+      expired: "Expired",
+      missing: "Missing",
+      ok: "OK",
+      matched: "Matched",
+      page: "page",
+      pages: "pages",
+      remove: "Remove",
+      duplicate: "Duplicate content",
+      badPdf: "Could not read this PDF. Please choose a valid, unencrypted PDF.",
+      invalidJson: "Invalid requirements file. It must contain a tender object and a requirements array.",
+      loadError: "Could not load requirements: ",
+      pdfOnly: "Only PDF files are accepted: ",
+      fileLimit: "The limit is 30 PDF files. This selection was not added.",
+      sizeLimit: "The total PDF size cannot exceed 50 MB. This selection was not added.",
+      ready: "All required documents are valid. The package is ready to generate.",
+      resolve: "Resolve the blocking issues shown above before generating.",
+      loadFirst: "Load a valid requirements.json file to begin.",
+      generating: "Building your PDF package…",
+      generateError: "Could not generate the package: ",
+      generated: "Your package PDF has been downloaded.",
+      noRequirements: "No documents are defined in this requirements file.",
+      packageDate: "Package date",
+      included: "Included documents",
+      footer: "Page",
+      statusLoad: "Load requirements and PDFs to see validation results."
+    },
+    bn: {
+      eyebrow: "দরপত্র নথি কর্মক্ষেত্র",
+      appTitle: "দরপত্র প্যাকেজ যাচাইকারী",
+      appSubtitle: "সম্পূর্ণ দরপত্র প্যাকেজ প্রস্তুত, যাচাই ও তৈরি করুন।",
+      tenderInfo: "দরপত্রের তথ্য",
+      loadRequirements: "দরপত্রের প্রয়োজনীয়তা লোড করুন",
+      loadHelp: "এই দরপত্রের requirements.json ফাইল নির্বাচন করুন।",
+      chooseJson: "requirements.json নির্বাচন করুন",
+      requiredDocs: "প্রয়োজনীয় নথি",
+      requirementsEmpty: "নথির তালিকা দেখতে requirements.json লোড করুন।",
+      document: "নথি",
+      requirement: "প্রয়োজনীয়তা",
+      expiry: "মেয়াদ",
+      matchedFile: "মেলানো ফাইল",
+      status: "অবস্থা",
+      uploadedDocs: "আপলোড করা নথি",
+      uploadPdfs: "PDF ফাইল আপলোড করুন",
+      uploadHelp: "দরপত্রের প্রয়োজনীয়তার সঙ্গে মেলাতে নথি যোগ করুন।",
+      choosePdfs: "PDF ফাইল নির্বাচন করুন",
+      limits: "শুধু PDF · সর্বোচ্চ ৩০টি ফাইল · মোট ৫০ MB",
+      files: "ফাইল",
+      validationSummary: "যাচাইয়ের সারাংশ",
+      valid: "ঠিক আছে",
+      notProvided: "দেওয়া হয়নি",
+      blockingIssues: "সমাধান প্রয়োজন",
+      generate: "প্যাকেজ PDF তৈরি করুন",
+      generateHelp: "তৈরি করতে প্রয়োজনীয়তা লোড করে সব সমস্যা সমাধান করুন।",
+      privacyNote: "ফাইলগুলো আপনার ব্রাউজারেই প্রক্রিয়া করা হয়, আপলোড করা হয় না।",
+      tenderId: "দরপত্র আইডি",
+      tenderTitle: "দরপত্রের শিরোনাম",
+      entity: "ক্রয়কারী প্রতিষ্ঠান",
+      bidder: "দরদাতা",
+      deadline: "জমাদানের শেষ সময়",
+      required: "আবশ্যক",
+      optional: "ঐচ্ছিক",
+      notRequired: "প্রযোজ্য নয়",
+      selectPdf: "PDF নির্বাচন করুন",
+      expiryNeeded: "মেয়াদ শেষের তারিখ প্রয়োজন",
+      expired: "মেয়াদোত্তীর্ণ",
+      missing: "অনুপস্থিত",
+      ok: "ঠিক আছে",
+      matched: "মেলানো হয়েছে",
+      page: "পৃষ্ঠা",
+      pages: "পৃষ্ঠা",
+      remove: "সরান",
+      duplicate: "একই বিষয়বস্তুর ফাইল",
+      badPdf: "PDF পড়া যায়নি। বৈধ, পাসওয়ার্ডবিহীন PDF নির্বাচন করুন।",
+      invalidJson: "requirements ফাইলটি সঠিক নয়। এতে tender object এবং requirements তালিকা থাকতে হবে।",
+      loadError: "প্রয়োজনীয়তা লোড করা যায়নি: ",
+      pdfOnly: "শুধু PDF ফাইল গ্রহণ করা হয়: ",
+      fileLimit: "সর্বোচ্চ ৩০টি PDF ফাইল দেওয়া যাবে। এই নির্বাচন যোগ করা হয়নি।",
+      sizeLimit: "সব PDF মিলিয়ে ৫০ MB-এর বেশি হতে পারবে না। এই নির্বাচন যোগ করা হয়নি।",
+      ready: "সব আবশ্যক নথি ঠিক আছে। প্যাকেজ তৈরির জন্য প্রস্তুত।",
+      resolve: "তৈরির আগে দেখানো সমস্যাগুলো সমাধান করুন।",
+      loadFirst: "শুরু করতে সঠিক requirements.json ফাইল লোড করুন।",
+      generating: "PDF প্যাকেজ তৈরি হচ্ছে…",
+      generateError: "প্যাকেজ তৈরি করা যায়নি: ",
+      generated: "আপনার প্যাকেজ PDF ডাউনলোড হয়েছে।",
+      noRequirements: "এই ফাইলে কোনো নথি নির্ধারিত নেই।",
+      packageDate: "প্যাকেজের তারিখ",
+      included: "অন্তর্ভুক্ত নথি",
+      footer: "পৃষ্ঠা",
+      statusLoad: "যাচাই দেখতে requirements ও PDF লোড করুন।"
     }
-);
+  };
 
+  const tr = (key) => text[state.language][key] || text.en[key] || key;
 
+  const safe = (value) =>
+    String(value ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[c]));
 
-// ======================================================
-// TASK 1
-// LOAD requirements.json
-// ======================================================
+  const formatSize = (bytes) =>
+    bytes < 1024 * 1024
+      ? `${Math.ceil(bytes / 1024)} KB`
+      : `${(bytes / 1048576).toFixed(1)} MB`;
 
-requirementsFileInput.addEventListener(
-    "change",
-    handleRequirementsFile
-);
+  const dateOnly = (value) => {
+    if (!value) return null;
+    const date = new Date(`${value}T00:00:00Z`);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
 
+  const localToday = () => {
+    const date = new Date();
+    return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  };
 
+  document.querySelectorAll(".language-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.language = button.dataset.language;
+      document.documentElement.lang = state.language;
 
-async function handleRequirementsFile(
-    event
-) {
+      document.querySelectorAll(".language-btn").forEach((item) => {
+        item.classList.toggle("active", item === button);
+      });
 
-    const file =
-        event.target.files[0];
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        const key = node.dataset.i18n;
+        if (text[state.language][key]) node.textContent = tr(key);
+      });
 
+      renderAll();
+    });
+  });
+
+  $("requirements-file").addEventListener("change", loadRequirements);
+  $("pdf-files").addEventListener("change", addPdfs);
+  $("generate-button").addEventListener("click", generatePackage);
+
+  async function loadRequirements(event) {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const data = JSON.parse(await file.text());
+
+      if (!data || typeof data.tender !== "object" || !Array.isArray(data.requirements)) {
+        throw new Error(tr("invalidJson"));
+      }
+
+      const ids = new Set();
+      const requirements = data.requirements
+        .map((requirement, index) => {
+          if (!requirement || requirement.id == null || ids.has(String(requirement.id))) {
+            throw new Error(tr("invalidJson"));
+          }
+
+          ids.add(String(requirement.id));
+          return {
+            ...requirement,
+            id: String(requirement.id),
+            order: Number(requirement.order ?? index + 1)
+          };
+        })
+        .sort((a, b) => a.order - b.order);
+
+      state.tender = data.tender;
+      state.requirements = requirements;
+      state.matches.clear();
+      state.expiryDates.clear();
+
+      $("requirements-error").classList.add("hidden");
+      renderAll();
+    } catch (error) {
+      showNotice("requirements-error", `${tr("loadError")}${error.message}`, true);
+    }
+  }
+
+  function renderTender() {
+    const box = $("tender-details");
+
+    if (!state.tender) {
+      box.classList.add("hidden");
+      return;
+    }
+
+    const tender = state.tender;
+    const entries = [
+      ["tenderId", tender.tender_id],
+      ["tenderTitle", tender.title_en || tender.title],
+      ["entity", tender.procuring_entity],
+      ["bidder", tender.bidder],
+      ["deadline", tender.submission_deadline]
+    ];
+
+    box.innerHTML = entries
+      .map(([label, value]) =>
+        `<div class="detail-item"><dt>${safe(tr(label))}</dt><dd>${safe(value || "—")}</dd></div>`
+      )
+      .join("");
+
+    box.classList.remove("hidden");
+  }
+
+  function fileForRequirement(requirementId) {
+    const fileId = state.matches.get(requirementId);
+    return state.files.find((file) => file.id === fileId) || null;
+  }
+
+  function requirementForFile(fileId) {
+    for (const [requirementId, currentFileId] of state.matches) {
+      if (currentFileId === fileId) return requirementId;
+    }
+    return null;
+  }
+
+  function isDuplicate(file) {
+    return state.files.find((other) => other.hash === file.hash)?.id !== file.id;
+  }
+
+  function statusOf(requirement) {
+    const file = fileForRequirement(requirement.id);
 
     if (!file) {
-
-        return;
-
+      return requirement.mandatory === false
+        ? { label: tr("notProvided"), kind: "warning", blocking: false }
+        : { label: tr("missing"), kind: "error", blocking: true };
     }
 
+    if (requirement.has_expiry) {
+      const value = state.expiryDates.get(requirement.id);
+
+      if (!value) {
+        return { label: tr("expiryNeeded"), kind: "error", blocking: true };
+      }
+
+      const expiry = dateOnly(value);
+      const deadline = dateOnly(state.tender?.submission_deadline);
+
+      if (!expiry) {
+        return { label: tr("expiryNeeded"), kind: "error", blocking: true };
+      }
+
+      // An expiry date equal to the submission deadline is valid.
+      if (expiry < localToday() || (deadline && expiry < deadline)) {
+        return { label: tr("expired"), kind: "error", blocking: true };
+      }
+    }
+
+    return { label: tr("ok"), kind: "ok", blocking: false };
+  }
+
+  function renderRequirements() {
+    const list = $("requirements-list");
+
+    if (!state.requirements.length) {
+      $("requirements-empty").textContent = state.tender
+        ? tr("noRequirements")
+        : tr("requirementsEmpty");
+      $("requirements-empty").classList.remove("hidden");
+      $("requirements-table-wrapper").classList.add("hidden");
+      return;
+    }
+
+    $("requirements-empty").classList.add("hidden");
+    $("requirements-table-wrapper").classList.remove("hidden");
+    list.replaceChildren();
+
+    state.requirements.forEach((requirement) => {
+      const row = document.createElement("tr");
+      const matched = fileForRequirement(requirement.id);
+      const status = statusOf(requirement);
+      const name = state.language === "bn"
+        ? requirement.title_bn
+        : requirement.title_en;
+
+      const choices = state.files.filter((file) =>
+        !isDuplicate(file) &&
+        (!requirementForFile(file.id) || requirementForFile(file.id) === requirement.id)
+      );
+
+      const options = [
+        `<option value="">${safe(tr("selectPdf"))}</option>`,
+        ...choices.map((file) =>
+          `<option value="${safe(file.id)}" ${matched?.id === file.id ? "selected" : ""}>${safe(file.name)}</option>`
+        )
+      ].join("");
+
+      const expiryCell = requirement.has_expiry && matched
+        ? `<input class="expiry-input" type="date" aria-label="${safe(tr("expiry"))}" value="${safe(state.expiryDates.get(requirement.id) || "")}">`
+        : `<span class="muted">${safe(requirement.has_expiry ? tr("required") : tr("notRequired"))}</span>`;
+
+      row.innerHTML = `
+        <td>${safe(requirement.order)}</td>
+        <td>${safe(name || requirement.title_en || requirement.id)}</td>
+        <td><span class="requirement-type">${requirement.mandatory === false ? safe(tr("optional")) : safe(tr("required"))}</span></td>
+        <td></td>
+        <td><select class="match-select" aria-label="${safe(tr("matchedFile"))}">${options}</select></td>
+        <td><span class="status-badge status-${status.kind}">${safe(status.label)}</span></td>
+      `;
+
+      row.cells[3].innerHTML = expiryCell;
+      list.appendChild(row);
+
+      row.querySelector(".match-select").addEventListener("change", (event) => {
+        const fileId = event.target.value;
+
+        if (fileId) {
+          const oldRequirement = requirementForFile(fileId);
+
+          if (oldRequirement && oldRequirement !== requirement.id) {
+            state.matches.delete(oldRequirement);
+          }
+
+          if (state.matches.get(requirement.id) !== fileId) {
+            state.expiryDates.delete(requirement.id);
+          }
+
+          state.matches.set(requirement.id, fileId);
+        } else {
+          state.matches.delete(requirement.id);
+          state.expiryDates.delete(requirement.id);
+        }
+
+        renderAll();
+      });
+
+      row.querySelector(".expiry-input")?.addEventListener("change", (event) => {
+        state.expiryDates.set(requirement.id, event.target.value);
+        renderAll();
+      });
+    });
+  }
+
+  async function addPdfs(event) {
+    const selected = Array.from(event.target.files);
+    event.target.value = "";
+    if (!selected.length) return;
+
+    const nonPdf = selected.find((file) =>
+      !file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf"
+    );
+
+    if (nonPdf) {
+      return showNotice("upload-message", `${tr("pdfOnly")}${nonPdf.name}`, true);
+    }
+
+    if (state.files.length + selected.length > MAX_FILES) {
+      return showNotice("upload-message", tr("fileLimit"), true);
+    }
+
+    const currentBytes = state.files.reduce((sum, file) => sum + file.size, 0);
+    const selectedBytes = selected.reduce((sum, file) => sum + file.size, 0);
+
+    if (currentBytes + selectedBytes > MAX_BYTES) {
+      return showNotice("upload-message", tr("sizeLimit"), true);
+    }
+
+    showNotice("upload-message", "", false);
+
+    for (const file of selected) {
+      try {
+        const buffer = await file.arrayBuffer();
+        const hash = await digest(buffer);
+        const pdf = await window.pdfjsLib.getDocument({
+          data: new Uint8Array(buffer.slice(0))
+        }).promise;
+
+        state.files.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          size: file.size,
+          hash,
+          pages: pdf.numPages,
+          buffer
+        });
+      } catch {
+        showNotice("upload-message", `${tr("badPdf")} ${file.name}`, true);
+      }
+    }
+
+    renderAll();
+  }
+
+  async function digest(buffer) {
+    const bytes = await crypto.subtle.digest("SHA-256", buffer);
+    return Array.from(
+      new Uint8Array(bytes),
+      (byte) => byte.toString(16).padStart(2, "0")
+    ).join("");
+  }
+
+  function renderFiles() {
+    const list = $("uploaded-files");
+    list.replaceChildren();
+
+    const total = state.files.reduce((sum, file) => sum + file.size, 0);
+    $("file-count").textContent =
+      `${state.files.length} ${state.files.length === 1 ? "file" : "files"} · ${formatSize(total)}`;
+
+    $("uploaded-list-container").classList.toggle("hidden", state.files.length === 0);
+
+    state.files.forEach((file) => {
+      const row = document.createElement("div");
+      row.className = "file-row";
+
+      const duplicate = isDuplicate(file);
+
+      row.innerHTML = `
+        <div class="file-info">
+          <span class="file-name">${safe(file.name)}</span>
+          <span class="file-meta">${formatSize(file.size)} · ${file.pages} ${safe(file.pages === 1 ? tr("page") : tr("pages"))}</span>
+          ${duplicate ? `<span class="file-warning">${safe(tr("duplicate"))}</span>` : ""}
+        </div>
+        <button type="button" class="button button-secondary">${safe(tr("remove"))}</button>
+      `;
+
+      row.querySelector("button").addEventListener("click", () => {
+        for (const [requirementId, fileId] of state.matches) {
+          if (fileId === file.id) {
+            state.matches.delete(requirementId);
+            state.expiryDates.delete(requirementId);
+          }
+        }
+
+        state.files = state.files.filter((item) => item.id !== file.id);
+        renderAll();
+      });
+
+      list.appendChild(row);
+    });
+  }
+
+  function updateValidation() {
+    const statuses = state.requirements.map(statusOf);
+    const valid = statuses.filter((status) => status.kind === "ok").length;
+    const optional = statuses.filter((status) => status.kind === "warning").length;
+    const problems = statuses.filter((status) => status.blocking).length;
+
+    $("valid-count").textContent = valid;
+    $("optional-count").textContent = optional;
+    $("problem-count").textContent = problems;
+    $("requirements-count").textContent = `${valid} / ${state.requirements.length} ${tr("ok")}`;
+
+    const ready = Boolean(state.tender && state.requirements.length && problems === 0);
+    $("generate-button").disabled = !ready;
+
+    $("validation-message").textContent = !state.tender
+      ? tr("loadFirst")
+      : ready
+        ? tr("ready")
+        : tr("resolve");
+
+    $("generate-help").textContent = ready ? tr("ready") : tr("generateHelp");
+  }
+
+  function renderAll() {
+    renderTender();
+    renderRequirements();
+    renderFiles();
+    updateValidation();
+  }
+
+  function showNotice(id, message, error) {
+    const element = $(id);
+    element.textContent = message;
+    element.classList.toggle("hidden", !message);
+    element.classList.toggle("error", Boolean(error));
+  }
+
+  async function generatePackage() {
+    if ($("generate-button").disabled || !window.PDFLib) return;
+
+    $("generate-button").disabled = true;
+    $("validation-message").textContent = tr("generating");
 
     try {
+      const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+      const output = await PDFDocument.create();
+      const font = await output.embedFont(StandardFonts.Helvetica);
+      const bold = await output.embedFont(StandardFonts.HelveticaBold);
+      const pageSize = [612, 792];
+      const margin = 48;
 
-        // Read JSON file.
-        const text =
-            await file.text();
+      const draw = (
+        page,
+        value,
+        x,
+        y,
+        size = 11,
+        face = font,
+        color = rgb(.12, .16, .23)
+      ) => {
+        page.drawText(String(value ?? "—"), {
+          x,
+          y,
+          size,
+          font: face,
+          color,
+          maxWidth: pageSize[0] - margin - x
+        });
+      };
 
+      let cover = output.addPage(pageSize);
 
-        // Convert JSON text
-        // into JavaScript object.
-        const data =
-            JSON.parse(text);
+      draw(cover, "TENDER DOCUMENT PACKAGE", margin, 720, 19, bold, rgb(.12, .29, .62));
+      draw(cover, `${tr("tenderId")}: ${state.tender.tender_id || "—"}`, margin, 674, 12, bold);
+      draw(cover, `${tr("tenderTitle")}: ${state.tender.title_en || state.tender.title || "—"}`, margin, 649, 12);
+      draw(cover, `${tr("entity")}: ${state.tender.procuring_entity || "—"}`, margin, 624, 12);
+      draw(cover, `${tr("bidder")}: ${state.tender.bidder || "—"}`, margin, 599, 12);
+      draw(cover, `${tr("deadline")}: ${state.tender.submission_deadline || "—"}`, margin, 574, 12);
+      draw(cover, `${tr("packageDate")}: ${new Date().toISOString().slice(0, 10)}`, margin, 549, 12);
+      draw(cover, tr("included"), margin, 500, 13, bold);
 
+      let y = 475;
 
-        // Check basic structure.
-        if (
-            !data.tender ||
-            !Array.isArray(
-                data.requirements
-            )
-        ) {
+      for (const requirement of state.requirements) {
+        const file = fileForRequirement(requirement.id);
+        if (!file) continue;
 
-            throw new Error(
-                "Invalid requirements.json format."
-            );
+        const name = requirement.title_en || requirement.id;
 
+        if (y < 55) {
+          cover = output.addPage(pageSize);
+          draw(cover, tr("included"), margin, 730, 13, bold);
+          y = 700;
         }
 
+        draw(cover, `${requirement.order}. ${name} — ${file.name}`, margin + 10, y, 10);
+        y -= 20;
+      }
 
-        // Store tender information.
-        appState.tender =
-            data.tender;
+      const ordered = state.requirements
+        .map((requirement) => ({
+          requirement,
+          file: fileForRequirement(requirement.id)
+        }))
+        .filter((item) => item.file);
 
+      for (const { file } of ordered) {
+        const source = await PDFDocument.load(file.buffer.slice(0));
+        const pages = await output.copyPages(source, source.getPageIndices());
+        pages.forEach((page) => output.addPage(page));
+      }
 
-        // Store requirements.
-        //
-        // The spread operator creates
-        // a new array.
-        appState.requirements =
-            [
-                ...data.requirements
-            ];
+      const pages = output.getPages();
+      const total = pages.length;
+      const tenderId = String(state.tender.tender_id || "Tender");
 
+      pages.forEach((page, index) => {
+        const { width } = page.getSize();
 
-        // Sort by order.
-        appState.requirements.sort(
-            (a, b) =>
-                a.order - b.order
-        );
+        page.drawText(`${tenderId} | Page ${index + 1} of ${total}`, {
+          x: 36,
+          y: 14,
+          size: 8,
+          font,
+          color: rgb(.35, .38, .43),
+          maxWidth: width - 72
+        });
+      });
 
+      const bytes = await output.save();
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
 
-        // Clear old matches
-        // when a new tender is loaded.
-        appState.matches = {};
+      link.href = url;
+      link.download = `${tenderId.replace(/[\\/:*?"<>|]/g, "_")}_Package.pdf`;
+      link.click();
 
-
-        // Display information.
-        renderTender();
-
-        renderRequirements();
-
-        updateValidationMessage();
-
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      $("validation-message").textContent = tr("generated");
+    } catch (error) {
+      $("validation-message").textContent = `${tr("generateError")}${error.message}`;
+    } finally {
+      updateValidation();
     }
+  }
 
-
-    catch (error) {
-
-        alert(
-            `Could not load requirements.json: ${error.message}`
-        );
-
-    }
-
-}
-
-
-
-// ======================================================
-// DISPLAY TENDER INFORMATION
-// ======================================================
-
-function renderTender() {
-
-    const tender =
-        appState.tender;
-
-
-    if (!tender) {
-
-        return;
-
-    }
-
-
-    // Show the tender details section.
-    tenderDetails.classList.remove(
-        "hidden"
-    );
-
-
-    tenderIdElement.textContent =
-        tender.tender_id || "—";
-
-
-    tenderTitleElement.textContent =
-        tender.title || "—";
-
-
-    procuringEntityElement.textContent =
-        tender.procuring_entity || "—";
-
-
-    bidderElement.textContent =
-        tender.bidder || "—";
-
-
-    submissionDeadlineElement.textContent =
-        tender.submission_deadline || "—";
-
-}
-
-
-
-// ======================================================
-// TASK 1
-// DISPLAY REQUIREMENTS
-// ======================================================
-
-function renderRequirements() {
-
-    // Clear previous table rows.
-    requirementsList.innerHTML = "";
-
-
-    // No requirements.
-    if (
-        appState.requirements.length === 0
-    ) {
-
-        requirementsEmpty.classList.remove(
-            "hidden"
-        );
-
-        requirementsTableWrapper.classList.add(
-            "hidden"
-        );
-
-        requirementsCount.textContent =
-            "0 / 0 OK";
-
-        return;
-
-    }
-
-
-    // Show table.
-    requirementsEmpty.classList.add(
-        "hidden"
-    );
-
-    requirementsTableWrapper.classList.remove(
-        "hidden"
-    );
-
-
-    // Create one row for each requirement.
-    appState.requirements.forEach(
-        (requirement) => {
-
-            const row =
-                document.createElement(
-                    "tr"
-                );
-
-
-            // Get the file matched
-            // to this requirement.
-            const matchedFile =
-                getMatchedFile(
-                    requirement.id
-                );
-
-
-            // Select title according
-            // to current language.
-            const documentTitle =
-                appState.language === "bn"
-                    ? requirement.title_bn
-                    : requirement.title_en;
-
-
-            row.innerHTML = `
-
-                <td>
-                    ${requirement.order}
-                </td>
-
-
-                <td>
-                    ${escapeHtml(
-                        documentTitle ||
-                        "Untitled document"
-                    )}
-                </td>
-
-
-                <td>
-
-                    <span class="requirement-type">
-
-                        ${
-                            requirement.mandatory
-                                ? "Required"
-                                : "Optional"
-
-                        }
-
-                    </span>
-
-                </td>
-
-
-                <td>
-
-                    ${
-                        requirement.has_expiry
-                            ? "Required"
-                            : "Not required"
-
-                    }
-
-                </td>
-
-
-                <td class="match-cell">
-
-                    ${createMatchSelect(
-                        requirement
-                    )}
-
-                </td>
-
-
-                <td>
-
-                    <span class="status-placeholder">
-
-                        ${
-                            matchedFile
-                                ? "Matched"
-                                : "Not matched"
-
-                        }
-
-                    </span>
-
-                </td>
-
-            `;
-
-
-            requirementsList.appendChild(
-                row
-            );
-
-
-            // Find dropdown.
-            const select =
-                row.querySelector(
-                    ".match-select"
-                );
-
-
-            if (select) {
-
-                select.addEventListener(
-                    "change",
-                    (event) => {
-
-                        const fileId =
-                            event.target.value;
-
-
-                        // Empty selection
-                        // means undo match.
-                        if (
-                            fileId === ""
-                        ) {
-
-                            removeMatch(
-                                requirement.id
-                            );
-
-                        }
-
-
-                        else {
-
-                            matchFile(
-                                requirement.id,
-                                fileId
-                            );
-
-                        }
-
-
-                        // Refresh interface.
-                        renderRequirements();
-
-                        renderUploadedFiles();
-
-                        updateValidationMessage();
-
-                    }
-                );
-
-            }
-
-        }
-    );
-
-
-    updateRequirementCount();
-
-}
-
-
-
-// ======================================================
-// CREATE MATCH DROPDOWN
-// ======================================================
-
-function createMatchSelect(
-    requirement
-) {
-
-    // Get current match.
-    const currentFileId =
-        appState.matches[
-            requirement.id
-        ] || "";
-
-
-    let html = `
-
-        <select
-            class="match-select"
-            aria-label="Match file"
-        >
-
-            <option value="">
-                Select PDF
-            </option>
-
-    `;
-
-
-    // Add uploaded files
-    // to dropdown.
-    appState.uploadedFiles.forEach(
-        (file) => {
-
-            // Check whether file
-            // is already used.
-            const usedBy =
-                getRequirementForFile(
-                    file.id
-                );
-
-
-            // File is available if:
-            //
-            // 1. It is not matched.
-            //
-            // OR
-            //
-            // 2. It is already matched
-            //    to this requirement.
-            const available =
-                !usedBy ||
-                usedBy === requirement.id;
-
-
-            if (available) {
-
-                const selected =
-                    currentFileId === file.id
-                        ? "selected"
-                        : "";
-
-
-                html += `
-
-                    <option
-                        value="${file.id}"
-                        ${selected}
-                    >
-                        ${escapeHtml(
-                            file.name
-                        )}
-                    </option>
-
-                `;
-
-            }
-
-        }
-    );
-
-
-    html += `
-
-        </select>
-
-    `;
-
-
-    return html;
-
-}
-
-
-
-// ======================================================
-// TASK 3
-// MATCH FILE TO REQUIREMENT
-// ======================================================
-
-function matchFile(
-    requirementId,
-    fileId
-) {
-
-    // Check whether the selected
-    // file is already used.
-    const oldRequirement =
-        getRequirementForFile(
-            fileId
-        );
-
-
-    // If it is already assigned
-    // somewhere else, remove
-    // the old match.
-    if (oldRequirement) {
-
-        delete appState.matches[
-            oldRequirement
-        ];
-
-    }
-
-
-    // Remove previous match
-    // of this requirement.
-    delete appState.matches[
-        requirementId
-    ];
-
-
-    // Create new match.
-    appState.matches[
-        requirementId
-    ] = fileId;
-
-}
-
-
-
-// ======================================================
-// TASK 3
-// REMOVE MATCH
-// ======================================================
-
-function removeMatch(
-    requirementId
-) {
-
-    delete appState.matches[
-        requirementId
-    ];
-
-}
-
-
-
-// ======================================================
-// GET MATCHED FILE
-// ======================================================
-
-function getMatchedFile(
-    requirementId
-) {
-
-    const fileId =
-        appState.matches[
-            requirementId
-        ];
-
-
-    if (!fileId) {
-
-        return null;
-
-    }
-
-
-    return appState.uploadedFiles.find(
-        (file) =>
-            file.id === fileId
-    ) || null;
-
-}
-
-
-
-// ======================================================
-// FIND REQUIREMENT USING A FILE
-// ======================================================
-
-function getRequirementForFile(
-    fileId
-) {
-
-    for (
-        const requirementId
-        in appState.matches
-    ) {
-
-        if (
-            appState.matches[
-                requirementId
-            ] === fileId
-        ) {
-
-            return requirementId;
-
-        }
-
-    }
-
-
-    return null;
-
-}
-
-
-
-// ======================================================
-// TASK 2
-// UPLOAD PDF FILES
-// ======================================================
-
-pdfFilesInput.addEventListener(
-    "change",
-    handlePdfSelection
-);
-
-
-
-async function handlePdfSelection(
-    event
-) {
-
-    const selectedFiles =
-        Array.from(
-            event.target.files
-        );
-
-
-    if (
-        selectedFiles.length === 0
-    ) {
-
-        return;
-
-    }
-
-
-    // ----------------------------------------------
-    // Check maximum file count
-    // ----------------------------------------------
-
-    if (
-        appState.uploadedFiles.length +
-        selectedFiles.length >
-        MAX_FILES
-    ) {
-
-        alert(
-            `You can upload a maximum of ${MAX_FILES} PDF files.`
-        );
-
-
-        pdfFilesInput.value = "";
-
-        return;
-
-    }
-
-
-
-    // ----------------------------------------------
-    // Check file types
-    // ----------------------------------------------
-
-    for (
-        const file of selectedFiles
-    ) {
-
-        const isPdf =
-            file.type ===
-                "application/pdf" ||
-
-            file.name
-                .toLowerCase()
-                .endsWith(".pdf");
-
-
-        if (!isPdf) {
-
-            alert(
-                `"${file.name}" is not a PDF file. Only PDF files are allowed.`
-            );
-
-
-            pdfFilesInput.value = "";
-
-            return;
-
-        }
-
-    }
-
-
-
-    // ----------------------------------------------
-    // Check total file size
-    // ----------------------------------------------
-
-    const selectedSize =
-        selectedFiles.reduce(
-            (total, file) =>
-                total + file.size,
-            0
-        );
-
-
-    const newTotalSize =
-        getTotalFileSize() +
-        selectedSize;
-
-
-    if (
-        newTotalSize >
-        MAX_TOTAL_SIZE
-    ) {
-
-        alert(
-            "The total size of uploaded files cannot exceed 50 MB."
-        );
-
-
-        pdfFilesInput.value = "";
-
-        return;
-
-    }
-
-
-
-    // ----------------------------------------------
-    // Add files
-    // ----------------------------------------------
-
-    for (
-        const file of selectedFiles
-    ) {
-
-        // Create a simple
-        // unique identifier.
-        const fileId =
-            `${Date.now()}-${Math.random()
-                .toString(36)
-                .substring(2, 9)}`;
-
-
-        const fileObject = {
-
-            id: fileId,
-
-            file: file,
-
-            name: file.name,
-
-            size: file.size,
-
-            pageCount: null
-
-        };
-
-
-        // Count PDF pages.
-        fileObject.pageCount =
-            await getPdfPageCount(
-                file
-            );
-
-
-        // Save file information.
-        appState.uploadedFiles.push(
-            fileObject
-        );
-
-    }
-
-
-
-    // Refresh interface.
-    renderUploadedFiles();
-
-    renderRequirements();
-
-    updateValidationMessage();
-
-
-    // Clear input.
-    //
-    // This allows the same file
-    // to be selected again later.
-    pdfFilesInput.value = "";
-
-}
-
-
-
-// ======================================================
-// GET TOTAL FILE SIZE
-// ======================================================
-
-function getTotalFileSize() {
-
-    return appState.uploadedFiles.reduce(
-        (total, file) =>
-            total + file.size,
-        0
-    );
-
-}
-
-
-
-// ======================================================
-// COUNT PDF PAGES USING PDF.JS
-// ======================================================
-
-async function getPdfPageCount(
-    file
-) {
-
-    try {
-
-        // Make sure PDF.js loaded.
-        if (
-            typeof window.pdfjsLib ===
-            "undefined"
-        ) {
-
-            console.warn(
-                "PDF.js is not available."
-            );
-
-            return null;
-
-        }
-
-
-        // Convert file into
-        // ArrayBuffer.
-        const arrayBuffer =
-            await file.arrayBuffer();
-
-
-        // Load PDF.
-        const pdf =
-            await window.pdfjsLib
-                .getDocument({
-                    data: arrayBuffer
-                })
-                .promise;
-
-
-        // Return number of pages.
-        return pdf.numPages;
-
-    }
-
-
-    catch (error) {
-
-        console.error(
-            "Could not read PDF:",
-            error
-        );
-
-
-        return null;
-
-    }
-
-}
-
-
-
-// ======================================================
-// DISPLAY UPLOADED FILES
-// ======================================================
-
-function renderUploadedFiles() {
-
-    // Clear previous list.
-    uploadedFiles.innerHTML = "";
-
-
-    // No files.
-    if (
-        appState.uploadedFiles.length === 0
-    ) {
-
-        uploadedListContainer.classList.add(
-            "hidden"
-        );
-
-
-        fileCount.textContent =
-            "0 files";
-
-
-        return;
-
-    }
-
-
-    // Show list.
-    uploadedListContainer.classList.remove(
-        "hidden"
-    );
-
-
-    fileCount.textContent =
-        `${appState.uploadedFiles.length} file${
-            appState.uploadedFiles.length === 1
-                ? ""
-                : "s"
-        }`;
-
-
-
-    // Create one row per file.
-    appState.uploadedFiles.forEach(
-        (fileObject) => {
-
-            const row =
-                document.createElement(
-                    "div"
-                );
-
-
-            row.className =
-                "file-row";
-
-
-            // Find whether this file
-            // has been matched.
-            const matchedRequirementId =
-                getRequirementForFile(
-                    fileObject.id
-                );
-
-
-            const matchedRequirement =
-                appState.requirements.find(
-                    (requirement) =>
-                        requirement.id ===
-                        matchedRequirementId
-                );
-
-
-            let matchText =
-                "Not matched";
-
-
-            if (
-                matchedRequirement
-            ) {
-
-                matchText =
-                    appState.language === "bn"
-
-                        ? matchedRequirement.title_bn
-
-                        : matchedRequirement.title_en;
-
-            }
-
-
-
-            // Page count text.
-            const pageText =
-                fileObject.pageCount !== null
-
-                    ? `${fileObject.pageCount} pages`
-
-                    : "Page count unavailable";
-
-
-
-            row.innerHTML = `
-
-                <div class="file-info">
-
-                    <span class="file-name">
-
-                        ${escapeHtml(
-                            fileObject.name
-                        )}
-
-                    </span>
-
-
-                    <span class="file-meta">
-
-                        ${formatFileSize(
-                            fileObject.size
-                        )}
-
-                        •
-
-                        ${pageText}
-
-                    </span>
-
-
-                    <span class="file-match">
-
-                        ${
-                            matchedRequirement
-
-                                ? `Matched: ${escapeHtml(
-                                    matchText
-                                )}`
-
-                                : "Not matched"
-                        }
-
-                    </span>
-
-                </div>
-
-
-                <button
-                    class="button button-secondary"
-                    type="button"
-                >
-                    Remove
-                </button>
-
-            `;
-
-
-
-            // Remove button.
-            row
-                .querySelector("button")
-                .addEventListener(
-                    "click",
-                    () => {
-
-                        removeUploadedFile(
-                            fileObject.id
-                        );
-
-                    }
-                );
-
-
-
-            uploadedFiles.appendChild(
-                row
-            );
-
-        }
-    );
-
-}
-
-
-
-// ======================================================
-// REMOVE UPLOADED FILE
-// ======================================================
-
-function removeUploadedFile(
-    fileId
-) {
-
-    // Find requirement using
-    // this file.
-    const requirementId =
-        getRequirementForFile(
-            fileId
-        );
-
-
-    // Remove match first.
-    if (requirementId) {
-
-        delete appState.matches[
-            requirementId
-        ];
-
-    }
-
-
-    // Remove file from array.
-    appState.uploadedFiles =
-        appState.uploadedFiles.filter(
-            (file) =>
-                file.id !== fileId
-        );
-
-
-    // Refresh interface.
-    renderUploadedFiles();
-
-    renderRequirements();
-
-    updateValidationMessage();
-
-}
-
-
-
-// ======================================================
-// UPDATE REQUIREMENT COUNT
-// ======================================================
-
-function updateRequirementCount() {
-
-    const total =
-        appState.requirements.length;
-
-
-    const matched =
-        Object.keys(
-            appState.matches
-        ).length;
-
-
-    requirementsCount.textContent =
-        `${matched} / ${total} matched`;
-
-}
-
-
-
-// ======================================================
-// VALIDATION MESSAGE
-// ======================================================
-//
-// This is only a temporary message for the
-// current development stage.
-//
-// Full validation will be implemented later.
-// ======================================================
-
-function updateValidationMessage() {
-
-    // No tender loaded.
-    if (!appState.tender) {
-
-        validationMessage.textContent =
-            "Load a tender and upload documents to begin the validation workflow.";
-
-        return;
-
-    }
-
-
-    // No requirements.
-    if (
-        appState.requirements.length === 0
-    ) {
-
-        validationMessage.textContent =
-            "No requirements were loaded.";
-
-        return;
-
-    }
-
-
-    const matchedCount =
-        Object.keys(
-            appState.matches
-        ).length;
-
-
-    const totalRequirements =
-        appState.requirements.length;
-
-
-    const totalFiles =
-        appState.uploadedFiles.length;
-
-
-    validationMessage.textContent =
-        `${matchedCount} of ${totalRequirements} requirements matched. ${totalFiles} PDF file${totalFiles === 1 ? "" : "s"} uploaded.`;
-
-}
-
-
-
-// ======================================================
-// FORMAT FILE SIZE
-// ======================================================
-
-function formatFileSize(
-    bytes
-) {
-
-    if (
-        bytes < 1024 * 1024
-    ) {
-
-        return `${Math.round(
-            bytes / 1024
-        )} KB`;
-
-    }
-
-
-    return `${(
-        bytes /
-        (1024 * 1024)
-    ).toFixed(1)} MB`;
-
-}
-
-
-
-// ======================================================
-// ESCAPE HTML
-// ======================================================
-//
-// This prevents file names or JSON values
-// from being interpreted as HTML.
-// ======================================================
-
-function escapeHtml(
-    value
-) {
-
-    return String(value)
-
-        .replaceAll(
-            "&",
-            "&amp;"
-        )
-
-        .replaceAll(
-            "<",
-            "&lt;"
-        )
-
-        .replaceAll(
-            ">",
-            "&gt;"
-        )
-
-        .replaceAll(
-            '"',
-            "&quot;"
-        )
-
-        .replaceAll(
-            "'",
-            "&#039;"
-        );
-
-}
-
-
-
-// ======================================================
-// INITIAL STATE
-// ======================================================
-
-generateButton.disabled = true;
-
-
-validationMessage.textContent =
-    "Load a tender and upload documents to begin the validation workflow.";
+  renderAll();
+})();
