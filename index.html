@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Tender document package checker">
+    <title>Tender Package Checker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-content">
+            <div>
+                <h1>Tender Package Checker</h1>
+                <p>Prepare, validate, and generate a tender document package.</p>
+            </div>
+
+            <div class="language-switcher" aria-label="Language selection">
+                <button class="language-btn active" type="button" data-language="en">English</button>
+                <button class="language-btn" type="button" data-language="bn">বাংলা</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container main-content">
+        <!-- 1. Tender Information -->
+        <section class="card" id="tender-section" aria-labelledby="tender-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="section-number">01</p>
+                    <h2 id="tender-heading">Tender Information</h2>
+                </div>
+            </div>
+
+            <div class="file-loader">
+                <div>
+                    <h3>Load tender requirements</h3>
+                    <p>Select the <strong>requirements.json</strong> file provided with the tender.</p>
+                </div>
+
+                <label class="button button-primary file-button" for="requirements-file">
+                    Choose requirements.json
+                </label>
+                <input id="requirements-file" type="file" accept=".json,application/json">
+            </div>
+
+            <div class="tender-details hidden" id="tender-details">
+                <div class="detail-item">
+                    <span class="detail-label">Tender ID</span>
+                    <strong id="tender-id">—</strong>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Tender Title</span>
+                    <strong id="tender-title">—</strong>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Procuring Entity</span>
+                    <strong id="procuring-entity">—</strong>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Bidder</span>
+                    <strong id="bidder">—</strong>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Submission Deadline</span>
+                    <strong id="submission-deadline">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Required Documents -->
+        <section class="card" id="requirements-section" aria-labelledby="requirements-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="section-number">02</p>
+                    <h2 id="requirements-heading">Required Documents</h2>
+                </div>
+                <span class="section-count">0 / 0 OK</span>
+            </div>
+
+            <div class="empty-state" id="requirements-empty">
+                <p>Load requirements.json to see the required documents.</p>
+            </div>
+
+            <div class="table-wrapper hidden" id="requirements-table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Document</th>
+                            <th scope="col">Requirement</th>
+                            <th scope="col">Expiry</th>
+                            <th scope="col">Matched File</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="requirements-list"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 3. Uploaded Documents -->
+        <section class="card" id="uploads-section" aria-labelledby="uploads-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="section-number">03</p>
+                    <h2 id="uploads-heading">Uploaded Documents</h2>
+                </div>
+            </div>
+
+            <div class="upload-box">
+                <div class="upload-icon" aria-hidden="true">↑</div>
+                <h3>Upload PDF files</h3>
+                <p>Choose the tender documents you want to include.</p>
+
+                <label class="button button-secondary file-button" for="pdf-files">
+                    Choose PDF Files
+                </label>
+                <input id="pdf-files" type="file" accept=".pdf,application/pdf" multiple>
+
+                <small>Up to 30 files • 50 MB total</small>
+            </div>
+
+            <div class="uploaded-list hidden" id="uploaded-list-container">
+                <div class="list-header">
+                    <h3>Files</h3>
+                    <span id="file-count">0 files</span>
+                </div>
+                <div id="uploaded-files"></div>
+            </div>
+        </section>
+
+        <!-- 4. Validation Summary -->
+        <section class="card" id="validation-section" aria-labelledby="validation-heading">
+            <div class="section-heading">
+                <div>
+                    <p class="section-number">04</p>
+                    <h2 id="validation-heading">Validation Summary</h2>
+                </div>
+            </div>
+
+            <div class="validation-summary">
+                <div class="summary-item summary-ok">
+                    <span class="summary-icon" aria-hidden="true">✓</span>
+                    <div>
+                        <strong id="valid-count">0</strong>
+                        <span>Valid</span>
+                    </div>
+                </div>
+
+                <div class="summary-item summary-warning">
+                    <span class="summary-icon" aria-hidden="true">!</span>
+                    <div>
+                        <strong id="optional-count">0</strong>
+                        <span>Optional</span>
+                    </div>
+                </div>
+
+                <div class="summary-item summary-error">
+                    <span class="summary-icon" aria-hidden="true">×</span>
+                    <div>
+                        <strong id="problem-count">0</strong>
+                        <span>Problems</span>
+                    </div>
+                </div>
+            </div>
+
+            <p class="validation-message" id="validation-message">
+                Load a tender to begin validation.
+            </p>
+        </section>
+
+        <!-- 5. Generate Package -->
+        <section class="card generate-card" id="generate-section" aria-labelledby="generate-heading">
+            <div>
+                <p class="section-number">05</p>
+                <h2 id="generate-heading">Generate Package</h2>
+                <p class="generate-description">
+                    When all blocking problems are fixed, the final PDF package can be generated.
+                </p>
+            </div>
+
+            <button class="button button-primary generate-button" id="generate-button" type="button" disabled>
+                Generate Package
+            </button>
+
+            <div class="download-result hidden" id="download-result">
+                <p class="success-text">Package generated successfully.</p>
+                <button class="button button-secondary" id="download-button" type="button">
+                    Download Package
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>Tender Package Checker • Frontend-only application</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
